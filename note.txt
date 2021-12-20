@@ -1,0 +1,1 @@
+file cài phần mềm PuTTY để truyền kí tự qua Serial: https://www.putty.org/ 
