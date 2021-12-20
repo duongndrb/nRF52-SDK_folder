@@ -1,0 +1,11 @@
+<item name="Tool.CMSIS_Config_Wizard" wait="no">
+    <menu>&amp;CMSIS Configuration Wizard</menu>
+    <text>CMSIS Configuration Wizard</text>
+    <tip>Open a configuration file in CMSIS Configuration Wizard</tip>
+    <key>Ctrl+Y</key>
+    <match>*config*.h</match>
+    <message>CMSIS Config</message>
+    <commands>
+      java -jar &quot;$(CMSIS_CONFIG_TOOL)&quot; &quot;$(InputPath)&quot;
+    </commands>
+</item>

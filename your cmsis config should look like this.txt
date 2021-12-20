@@ -1,0 +1,31 @@
+<tools>
+
+  <!-- PC-lint - http://www.gimpel.com/html/pcl.htm -->
+
+  <if host_os="win">
+    <item name="Tool.PClint">
+      <menu>&amp;PC-lint (Unit Check)</menu>
+      <text>PC-lint (Unit Check)</text>
+      <tip>Run a PC-lint unit checkout on the selected file or folder</tip>
+      <key>Ctrl+L, Ctrl+P</key>
+      <match>*.c;*.cpp</match>
+      <message>Linting</message>
+      <commands>
+        &quot;$(LINTDIR)/lint-nt&quot; -v -incvar(__CW_ARM) -i$(LINTDIR)/lnt co-gcc.lnt $(DEFINES) $(INCLUDES) -D__GNUC__ -u -b +macros +macros -w2 -e537 +fie +ffn -width(0,4) -hF1 &quot;-format=%f:%l:%C:\s%t:\s%m [-e%n]&quot; &quot;$(InputPath)&quot;
+      </commands>
+    </item>
+  </if>
+
+  <item name="Tool.CMSIS_Config_Wizard" wait="no">
+    <menu>&amp;CMSIS Configuration Wizard</menu>
+    <text>CMSIS Configuration Wizard</text>
+    <tip>Open a configuration file in CMSIS Configuration Wizard</tip>
+    <key>Ctrl+Y</key>
+    <match>*config*.h</match>
+    <message>CMSIS Config</message>
+    <commands>
+      java -jar &quot;$(CMSIS_CONFIG_TOOL)&quot; &quot;$(InputPath)&quot;
+    </commands>
+</item>
+
+</tools>
