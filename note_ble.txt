@@ -1,0 +1,6 @@
+https://github.com/sandeepmistry/arduino-nRF5
+
+web download the nRF Connect 
+https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-desktop/Download#infotabs 
+
+tham khao code qua trinh : https://docs.platformio.org/en/latest/tutorials/nordicnrf52/arduino_debugging_unit_testing.html
