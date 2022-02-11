@@ -1,57 +1,6 @@
-// //////////////// SP02
-
-// #include <Arduino.h>
-#include <Wire.h>
-// #include "MAX30105.h"
-
-// MAX30105 particleSensor; // initialize MAX30102 with I2C
-
-// void setup()
-// {
-//   Serial.begin(115200);
-//   while(!Serial); //We must wait for Teensy to come online
-//   delay(100);
-//   Serial.println("");
-//   Serial.println("MAX30102");
-//   Serial.println("");
-//   delay(100);
-//   // Initialize sensor
-//   if (particleSensor.begin(Wire, I2C_SPEED_FAST) == false) //Use default I2C port, 400kHz speed
-//   {
-//     Serial.println("MAX30105 was not found. Please check wiring/power. ");
-//     while (1);
-//   }
-
-//   byte ledBrightness = 70; //Options: 0=Off to 255=50mA
-//   byte sampleAverage = 1; //Options: 1, 2, 4, 8, 16, 32
-//   byte ledMode = 2; //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green
-//   int sampleRate = 400; //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
-//   int pulseWidth = 69; //Options: 69, 118, 215, 411
-//   int adcRange = 16384; //Options: 2048, 4096, 8192, 16384
-
-//   // particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
-//   particleSensor.setup();
-// }
-
-// void loop() {
-//   particleSensor.check(); //Check the sensor
-//   while (particleSensor.available()) {
-//       // read stored IR
-//       // Serial.print(particleSensor.getFIFOIR());
-//       // Serial.print(",");
-
-//       // Serial.println(particleSensor.getFIFOIR());
-
-//       // read stored red
-//       Serial.println(particleSensor.getRed());
-//       // read next set of samples
-//       particleSensor.nextSample();  
-         
-//   }
-//   delay(5); 
-// }
 
 // Import the library 
+#include <Wire.h>
 #include <Arduino.h>
 #include <Wire.h>
 #include "MAX30105.h"
@@ -59,6 +8,7 @@
 #include <bluefruit.h>
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
+#include "heartRate.h"
 
 
 #include <filters.h>
@@ -94,6 +44,15 @@ int start_send_data_ecg             = 's'
             , read_battery              = 'b';
 
 int k = 0;
+
+// setting up for the heart Rate calculate
+const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
+byte rates[RATE_SIZE]; //Array of heart rates
+byte rateSpot = 0;
+long lastBeat = 0; //Time at which the last beat occurred
+
+float beatsPerMinute;
+int beatAvg;
 
 
 void connect_callback(uint16_t conn_handle);
@@ -173,6 +132,10 @@ void setup()
 
   // // particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
   particleSensor.setup();
+  particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
+  particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
+  particleSensor.enableDIETEMPRDY(); //Enable the temp ready interrupt. This is required.
+
   analogReadResolution(10);
   
 }
@@ -208,12 +171,13 @@ void startAdv(void)
 
 
 uint32_t long_time;
-bool flag_start_read_ecg = true;
+bool flag_start_read_ecg = false;
 bool flag_start_read_spo2 = false;
 
 //////////
 const unsigned int numReadings = 9;
 unsigned int dataECG[numReadings];
+unsigned int dataSPO2[numReadings];
 unsigned int i = 0;
 
 uint16_t bufferIn[10];
@@ -223,6 +187,66 @@ uint8_t bufferOut[20];
 
 void loop()
 {
+  /////////////
+  ///// READ TEMPERATURE
+  float temperature = particleSensor.readTemperature();
+
+  Serial.print("temperatureC=");
+  Serial.print(temperature, 4);
+
+  Serial.println();
+
+  /////////////
+  ///// READ BPM
+  long irValue = particleSensor.getIR();
+
+  if (checkForBeat(irValue) == true)
+  {
+    //We sensed a beat!
+    long delta = millis() - lastBeat;
+    lastBeat = millis();
+
+    beatsPerMinute = 60 / (delta / 1000.0);
+
+    if (beatsPerMinute < 255 && beatsPerMinute > 20)
+    {
+      rates[rateSpot++] = (byte)beatsPerMinute; //Store this reading in the array
+      rateSpot %= RATE_SIZE; //Wrap variable
+
+      //Take average of readings
+      beatAvg = 0;
+      for (byte x = 0 ; x < RATE_SIZE ; x++)
+        beatAvg += rates[x];
+      beatAvg /= RATE_SIZE;
+    }
+
+    // bufferIn[i+1] = beatAvg;
+    // i++;
+    // if (i>=numReadings)
+    // {
+    //   i=0; //reset to beginning of array, so you don't try to save readings outside of the bounds of the array
+    //   bufferIn[0] = 3;
+    //   copyBigEndianArray(bufferIn, 10, bufferOut);
+    //   bleuart.write(bufferOut,20);
+    // }
+
+
+  }
+
+  // Serial.print("IR=");
+  // Serial.print(irValue);
+  // Serial.print(", BPM=");
+  // Serial.print(beatsPerMinute);
+  // Serial.print(", Avg BPM=");
+  Serial.print(beatAvg);
+
+  if (irValue < 50000)
+  {
+    Serial.print(" No finger?");
+  }
+  Serial.println();
+  /////////////////////
+  ///// ECG GRAPH
   if(flag_start_read_ecg){
 
     // int dataEcg = analogRead(A2);
@@ -252,104 +276,74 @@ void loop()
     }
     // delay(8);
     
-
-    //////////
-    
-    
-    
-    // bufferIn[1] = 2;
-    // do
-    // {
-    //   int dem;
-    //   bufferIn[dem] == dataEcg;
-    // } while ( sizeof(bufferIn)> 0 && sizeof(bufferIn) < 10);
-    
-
-    // if(dem > 1 & dem<10 )
-    // {
-    //   bufferIn[dem] = dataEcg;
-      
-    // }
-    // copyBigEndianArray(bufferIn, dem, bufferOut);
-    // bleuart.write(bufferOut,dem*2);
-
-
-
-    ////////////////////////
-    // for(int i=2; i<10; i++)
-    // // // if( dem > 1)
-    // // // if(int (i > 1) && (i <10))
-    // {
-    //   bufferIn[i] = dataEcg;
-    // //   // bufferIn[i+1] = filteredval;
-    // //   // copyBigEndianArray(bufferIn, 2, bufferOut);
-    // //   // bleuart.write(bufferOut,20);
-    // }
-    // // else
-    // // {
-    // //   bufferIn[i] = 1;
-    // // }
-    // copyBigEndianArray(bufferIn, 10, bufferOut);
-    // bleuart.write(bufferOut,20);
-    //////////
   }
+  ///////////////
+  ///// SPO2 GRAPH
   if(flag_start_read_spo2)
   {
-    particleSensor.check(); //Check the sensor
-    if (particleSensor.available()) {
-      
-      // read stored red
-      Serial.println(particleSensor.getRed());
-      // read next set of samples
-      particleSensor.nextSample(); 
+    // particleSensor.check(); //Check the sensor
+    // // read stored red
+    Serial.println(particleSensor.getRed());
+    // // read next set of samples
+    // particleSensor.nextSample(); 
+
+    dataSPO2[i] = particleSensor.getRed();
+    bufferIn[i+1] = dataSPO2[i];
+    i++;
+    if (i>=numReadings)
+    {
+      i=0; //reset to beginning of array, so you don't try to save readings outside of the bounds of the array
+      bufferIn[0] = 2;
+      copyBigEndianArray(bufferIn, 10, bufferOut);
+      bleuart.write(bufferOut,20);
     }
     delay(10); 
   }
+
+  
   
 
-  // bleuart.write()
-  // if(millis() - long_time > 1000)
-  // {
-  //   long_time = millis();
+  if(millis() - long_time > 1000)
+  {
+    long_time = millis();
 
-  //   while(Serial.available())
-  //   {
-  //     // Delay to wait for enough input, since we have a limited transmission buffer
-  //     delay(2);
+    while(Serial.available())
+    {
+      // Delay to wait for enough input, since we have a limited transmission buffer
+      delay(2);
 
-  //     uint8_t buf[64];
-  //     int count = Serial.readBytes(buf, sizeof(buf));
-  //     bleuart.write( buf, count );
-  //     Serial.print(count);
-  //   }
+      uint8_t buf[64];
+      int count = Serial.readBytes(buf, sizeof(buf));
+      bleuart.write( buf, count );
+      Serial.print(count);
+    }
 
-  //   // Forward from BLEUART to HW Serial
-  //   while ( bleuart.available() )
-  //   {
-  //     int send;
-  //     send = bleuart.read();
-  //     Serial.println(send);
-  //     bleuart.print(send);
-  //     if (send == start_send_data_spo2)
-  //     {
-  //       flag_start_read_spo2 = true; 
-  //     }
-  //     if(send == stop_send_data_spo2)
-  //     {
-  //       flag_start_read_spo2 = false;
-  //     }
+    // Forward from BLEUART to HW Serial
+    while ( bleuart.available() )
+    {
+      int send;
+      send = bleuart.read();
+      Serial.println(send);
+      bleuart.print(send);
+      if (send == start_send_data_spo2)
+      {
+        flag_start_read_spo2 = true; 
+      }
+      if(send == stop_send_data_spo2)
+      {
+        flag_start_read_spo2 = false;
+      }
 
-  //     if(send == start_send_data_ecg)
-  //     {
-  //       flag_start_read_ecg = true;
-  //     }
-  //     if(send == stop_send_data_ecg)
-  //     {
-  //       flag_start_read_ecg = false;
-  //     }    
-  //   }
-  // }
-
+      if(send == start_send_data_ecg)
+      {
+        flag_start_read_ecg = true;
+      }
+      if(send == stop_send_data_ecg)
+      {
+        flag_start_read_ecg = false;
+      }    
+    }
+  }
 
 }
 /**
